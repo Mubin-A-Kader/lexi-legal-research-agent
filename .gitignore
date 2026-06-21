@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+*.egg-info/
+.streamlit/secrets.toml
+eval/results.json
+Task.md

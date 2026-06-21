@@ -1,0 +1,46 @@
+{
+  "case_context": "Client Mrs. Lakshmi Devi's husband (age 42, income Rs 35,000/month, dependents: wife + two minor children aged 8 and 12) was killed by a commercial truck whose driver had no valid driving licence. National Insurance Co. denies the claim arguing the policy is void because the driver was unlicensed. We act for the claimant and want to (a) compel the insurer to pay, and (b) maximise compensation.",
+
+  "methodology": "Labels were derived by mining the 56-judgment corpus for the case's core legal theme (unlicensed/defective-licence driver vs. insurer's attempt to avoid liability) and then verifying each candidate's OUTCOME from its judgment text. 'relevant' = the judgment turns on insurer liability where a driver licence / policy-breach defence is raised. 'supporting' = court still made the insurer pay the claimant (typically 'pay and recover' from the owner, per the National Insurance v. Swaran Singh line). 'adverse' = court exonerated or limited the insurer's liability on a licence/breach ground. This is a hand-curated benchmark for an automated eval; it is a defensible subset, not an exhaustive ground truth.",
+
+  "relevant_doc_ids": [
+    "doc_001", "doc_002", "doc_003", "doc_005", "doc_006", "doc_024", "doc_025",
+    "doc_026", "doc_027", "doc_028", "doc_029", "doc_030", "doc_031", "doc_032",
+    "doc_033", "doc_034", "doc_035", "doc_041"
+  ],
+
+  "supporting_doc_ids": [
+    "doc_003", "doc_006", "doc_024", "doc_025", "doc_026", "doc_027", "doc_028",
+    "doc_029", "doc_030", "doc_032", "doc_033", "doc_034", "doc_035"
+  ],
+
+  "adverse_doc_ids": ["doc_005", "doc_031", "doc_041"],
+
+  "doc_notes": {
+    "doc_001": "Insurer appeal re compensation; unlicensed-driver theme. Relevant.",
+    "doc_002": "Insurer held not liable, owner pays (pay-and-recover style). Relevant; claimant still recovers.",
+    "doc_003": "Unlicensed driver; insurer made to pay and recover from owner. Supporting.",
+    "doc_005": "Insurer exonerated from satisfying the award on licence/breach ground. ADVERSE.",
+    "doc_006": "Unlicensed driver, pay-and-recover; insurer liable to claimant. Supporting.",
+    "doc_024": "Insurer jointly/severally liable to pay compensation despite defence. Supporting.",
+    "doc_025": "Unlicensed driver; pay-and-recover. Supporting.",
+    "doc_026": "Pay-and-recover; claimant protected. Supporting.",
+    "doc_027": "Unlicensed driver; pay-and-recover. Supporting.",
+    "doc_028": "Unlicensed driver; pay-and-recover. Supporting.",
+    "doc_029": "Unlicensed driver; pay-and-recover, minor dependent. Supporting.",
+    "doc_030": "Pay-and-recover. Supporting.",
+    "doc_031": "Laxmi Narain Dhut (SC) — limits Swaran Singh for transfer/renewal contexts; insurer can avoid. ADVERSE.",
+    "doc_032": "S. Iyyapan — unlicensed driver, insurer liable / pay-and-recover. Supporting.",
+    "doc_033": "Unlicensed driver; pay-and-recover. Supporting.",
+    "doc_034": "Unlicensed driver; pay-and-recover. Supporting.",
+    "doc_035": "Unlicensed driver; pay-and-recover. Supporting.",
+    "doc_041": "Court held insurer 'not liable to pay compensation'. ADVERSE."
+  },
+
+  "general_query_gold": {
+    "Which judgments involve commercial vehicles?": {
+      "note": "Lenient check — expect a non-empty set of truck/lorry/transport-vehicle judgments incl. several of the relevant_doc_ids.",
+      "expected_any_of": ["doc_003", "doc_006", "doc_025", "doc_027", "doc_028", "doc_032", "doc_033", "doc_034", "doc_035"]
+    }
+  }
+}
