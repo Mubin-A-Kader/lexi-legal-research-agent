@@ -43,6 +43,13 @@ Hybrid: BM25 (lexical) + Chroma dense (MiniLM)  →  RRF fusion  →  cross-enco
 - **Cross-encoder rerank** restores the precision that the small embedding model gives up.
 - **Chunking:** 800-token, 100-overlap, paragraph-aware, with page spans retained for citation.
 
+> **Deployment note — hosted vs. local retrieval.** Dense embeddings run through ChromaDB's **ONNX**
+> all-MiniLM-L6-v2 (onnxruntime, no torch) so the app fits the 512 MB free tier. The **cross-encoder
+> reranker pulls in torch and is therefore disabled on the hosted instance** (`ENABLE_RERANKER=false`);
+> hosted retrieval relies on hybrid BM25 + dense + RRF alone. The eval numbers in §6 were measured
+> **locally with the reranker on**, so hosted precision is a touch lower than reported. The honest fix
+> at scale is a hosted reranker endpoint (or a paid instance) — see §5/§8.
+
 ## 3. Key tradeoffs
 
 | Decision | Chose | Gave up | Why acceptable |
