@@ -29,9 +29,13 @@ AGENT_MODEL = os.getenv("AGENT_MODEL", "gpt-4o-mini")
 EVAL_MODEL = os.getenv("EVAL_MODEL", "gpt-4o-mini")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")  # None = api.openai.com
 
-# --- Embeddings ---
-EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+# --- Embeddings / rerank ---
+# Dense retrieval uses ChromaDB's built-in ONNX all-MiniLM-L6-v2 (onnxruntime, no torch) so the
+# hosted runtime fits a 512 MB free tier.
 RERANK_MODEL = os.getenv("RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+# Cross-encoder rerank pulls in torch (~heavy). ON locally for best precision; turn OFF on small
+# hosted instances (ENABLE_RERANKER=false) to stay under the memory limit.
+ENABLE_RERANKER = os.getenv("ENABLE_RERANKER", "true").lower() in ("1", "true", "yes")
 
 # --- Chunking ---
 CHUNK_TOKENS = int(os.getenv("CHUNK_TOKENS", "800"))

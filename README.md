@@ -45,8 +45,10 @@ PDF corpus (56) ──ingest──► extracted_docs.json + chunks.json (committ
         Claude tool-calling agent (model-driven loop) ──► Streamlit UI (live trace)
 ```
 
-- **Embeddings:** `all-MiniLM-L6-v2` (90 MB — fits Render's 512 MB free tier).
-- **Reranker:** `cross-encoder/ms-marco-MiniLM-L-6-v2` (falls back to TinyBERT, then identity, on OOM).
+- **Embeddings:** `all-MiniLM-L6-v2` via ChromaDB's **ONNX** runtime (no torch) — keeps the hosted
+  runtime under the 512 MB free-tier limit.
+- **Reranker:** `cross-encoder/ms-marco-MiniLM-L-6-v2` (torch) — **local only**; OFF on hosted via
+  `ENABLE_RERANKER=false`. Install it with `pip install -r requirements-local.txt`.
 - **LLM:** OpenAI `gpt-4o-mini` (cheapest with reliable tool-calling) for both the agent and the
   eval/classify calls. Provider is a one-line switch (`LLM_PROVIDER=anthropic` → Claude); set
   `OPENAI_BASE_URL` to reuse the same code against any OpenAI-compatible API (e.g. DeepSeek).
@@ -56,8 +58,9 @@ PDF corpus (56) ──ingest──► extracted_docs.json + chunks.json (committ
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env          # add your OPENAI_API_KEY
+pip install -r requirements.txt                 # core (ONNX embeddings, no torch)
+pip install -r requirements-local.txt           # optional: cross-encoder reranker (torch)
+cp .env.example .env                             # add your OPENAI_API_KEY
 
 # (Optional) re-build indexes from the raw PDFs. Pre-built artifacts are committed,
 # so this is only needed if the corpus changes. Set CORPUS_DIR to the PDF folder.

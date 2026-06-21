@@ -19,6 +19,9 @@ def _load():
     global _reranker
     if _reranker is not None:
         return _reranker
+    if not config.ENABLE_RERANKER:
+        _reranker = "identity"  # disabled (e.g. low-memory hosted tier) — skip torch entirely
+        return _reranker
     from sentence_transformers import CrossEncoder
     for name in (config.RERANK_MODEL, _FALLBACK):
         try:

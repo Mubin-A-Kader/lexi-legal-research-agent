@@ -1,0 +1,4 @@
+# Local-only extras. Installs the cross-encoder reranker (pulls torch, ~heavy).
+# Hosted/free-tier deploys skip this (ENABLE_RERANKER=false) to stay under the 512 MB limit.
+#   pip install -r requirements.txt -r requirements-local.txt
+sentence-transformers>=3.0.0

@@ -11,16 +11,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 from rag.ingestion import DocChunk, load_chunks
 
-_embedder = None  # lazy SentenceTransformer
+_ef = None        # chroma ONNX embedding function (all-MiniLM-L6-v2, no torch)
 _retriever = None  # singleton HybridRetriever
 
 
-def get_embedder():
-    global _embedder
-    if _embedder is None:
-        from sentence_transformers import SentenceTransformer
-        _embedder = SentenceTransformer(config.EMBED_MODEL)
-    return _embedder
+def _embed_fn():
+    """ChromaDB's built-in ONNX MiniLM embedder. Uses onnxruntime, NOT torch — so the
+    hosted runtime stays small enough for a 512 MB free tier. Same model as the local rerank
+    stack's embeddings, so query/doc vectors are compatible."""
+    global _ef
+    if _ef is None:
+        from chromadb.utils import embedding_functions
+        _ef = embedding_functions.ONNXMiniLM_L6_V2()
+    return _ef
 
 
 def _chroma_client():
@@ -29,22 +32,21 @@ def _chroma_client():
 
 
 def build_chroma(chunks: List[DocChunk]) -> int:
-    """Embed chunks, write to persistent Chroma. Returns count."""
+    """Index chunks in Chroma. Chroma embeds via the ONNX EF (no torch). Returns count."""
     config.CHROMA_DIR.mkdir(parents=True, exist_ok=True)
     client = _chroma_client()
     try:
         client.delete_collection(config.COLLECTION_NAME)
     except Exception:
         pass
-    coll = client.create_collection(config.COLLECTION_NAME, metadata={"hnsw:space": "cosine"})
-
-    embedder = get_embedder()
-    texts = [c.text for c in chunks]
-    embs = embedder.encode(texts, batch_size=32, show_progress_bar=True, normalize_embeddings=True)
+    coll = client.create_collection(
+        config.COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"},
+        embedding_function=_embed_fn(),
+    )
     coll.add(
         ids=[c.chunk_id for c in chunks],
-        embeddings=[e.tolist() for e in embs],
-        documents=texts,
+        documents=[c.text for c in chunks],
         metadatas=[
             {"doc_id": c.doc_id, "title": c.title, "page_start": c.page_start, "page_end": c.page_end}
             for c in chunks
@@ -73,16 +75,17 @@ class HybridRetriever:
         return re.findall(r"[a-z0-9]+", text.lower())
 
     def _ensure_chroma(self, chunks):
+        ef = _embed_fn()
         try:
             client = _chroma_client()
-            coll = client.get_collection(config.COLLECTION_NAME)
+            coll = client.get_collection(config.COLLECTION_NAME, embedding_function=ef)
             if coll.count() == len(chunks):
                 return coll
         except Exception:
             pass
         # Rebuild (in-memory persistent dir) — happens on fresh deploy.
         build_chroma(chunks)
-        return _chroma_client().get_collection(config.COLLECTION_NAME)
+        return _chroma_client().get_collection(config.COLLECTION_NAME, embedding_function=ef)
 
     def bm25_search(self, query: str, n: int) -> List[tuple[str, float]]:
         scores = self.bm25.get_scores(self._tok(query))
@@ -90,8 +93,8 @@ class HybridRetriever:
         return [(self.chunks[i].chunk_id, float(s)) for i, s in ranked if s > 0]
 
     def dense_search(self, query: str, n: int) -> List[tuple[str, float]]:
-        emb = get_embedder().encode([query], normalize_embeddings=True)[0]
-        res = self.coll.query(query_embeddings=[emb.tolist()], n_results=n)
+        # Chroma embeds the query via the same ONNX EF (no torch).
+        res = self.coll.query(query_texts=[query], n_results=n)
         ids = res["ids"][0]
         dists = res["distances"][0]
         return [(cid, 1.0 - d) for cid, d in zip(ids, dists)]  # cosine sim
