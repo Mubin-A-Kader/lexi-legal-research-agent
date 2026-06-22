@@ -8,11 +8,11 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false        # set in Render dashboard (secret)
-      - key: APP_PASSWORD
-        sync: false        # shared access key — gates the public URL; unset = open
       - key: PYTHON_VERSION
         value: "3.12.7"
       - key: TOKENIZERS_PARALLELISM
         value: "false"
-      - key: ENABLE_RERANKER     # ON: bi-encoder cosine rerank via OpenAI embeds — no in-process model
+      - key: ENABLE_RERANKER     # ON: minimal ONNX bi-encoder rerank, no torch — fits 512 MB
         value: "true"
+      - key: APP_PASSWORD
+        sync: false        # set in Render dashboard (secret)
