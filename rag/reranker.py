@@ -1,6 +1,10 @@
-"""Cross-encoder reranker. Boosts precision after hybrid recall.
+"""Minimal reranker. Torch-free: re-scores hybrid candidates by cosine similarity
+between the query and each chunk, using the SAME ONNX MiniLM embedder as dense retrieval
+(onnxruntime, no torch). Works identically local and on the 512 MB hosted tier.
 
-Falls back to lighter TinyBERT if primary OOMs (512MB Render). Degrades to identity if both fail.
+This is a bi-encoder rerank (lighter than a cross-encoder) — it tightens ordering after
+RRF fusion without pulling sentence-transformers/torch into the runtime. Gated by
+ENABLE_RERANKER so it can still be switched off.
 """
 import sys
 from pathlib import Path
@@ -11,35 +15,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 from rag.ingestion import DocChunk
 
-_reranker = None
-_FALLBACK = "cross-encoder/ms-marco-TinyBERT-L-2-v2"
+_enabled = None
 
 
-def _load():
-    global _reranker
-    if _reranker is not None:
-        return _reranker
-    if not config.ENABLE_RERANKER:
-        _reranker = "identity"  # disabled (e.g. low-memory hosted tier) — skip torch entirely
-        return _reranker
-    from sentence_transformers import CrossEncoder
-    for name in (config.RERANK_MODEL, _FALLBACK):
-        try:
-            _reranker = CrossEncoder(name, max_length=512)
-            return _reranker
-        except Exception as e:  # pragma: no cover
-            print(f"[reranker] failed to load {name}: {e}")
-    _reranker = "identity"  # sentinel: skip reranking
-    return _reranker
+def _ready() -> bool:
+    global _enabled
+    if _enabled is None:
+        _enabled = bool(config.ENABLE_RERANKER)
+    return _enabled
 
 
 def rerank(query: str, chunks: List[DocChunk], top_k: int = None) -> List[tuple[DocChunk, float]]:
-    """Return [(chunk, score)] sorted desc, truncated to top_k."""
+    """Return [(chunk, cosine_score)] sorted desc, truncated to top_k."""
     top_k = top_k or config.RERANK_TOPK
-    model = _load()
-    if model == "identity" or not chunks:
+    if not _ready() or not chunks:
         return [(c, 0.0) for c in chunks[:top_k]]
-    pairs = [(query, c.text) for c in chunks]
-    scores = model.predict(pairs)
+
+    import numpy as np
+    from rag.retriever import _embed_fn  # shared ONNX MiniLM singleton — no extra model load
+
+    ef = _embed_fn()
+    vecs = np.asarray(ef([query] + [c.text for c in chunks]), dtype=np.float32)
+    vecs /= (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12)  # L2 normalize → dot = cosine
+    scores = vecs[1:] @ vecs[0]
+
     ranked = sorted(zip(chunks, scores), key=lambda x: -float(x[1]))
     return [(c, float(s)) for c, s in ranked[:top_k]]

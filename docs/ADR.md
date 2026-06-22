@@ -34,21 +34,24 @@ involve commercial vehicles?" and "find adverse precedents on policy-void defenc
 ### Retrieval layer (the `*_search` tools)
 
 ```
-Hybrid: BM25 (lexical) + Chroma dense (MiniLM)  →  RRF fusion  →  cross-encoder rerank  →  top-k
+Hybrid: BM25 (lexical) + Chroma dense (MiniLM)  →  RRF fusion  →  ONNX bi-encoder rerank  →  top-k
 ```
 
 - **Hybrid + RRF**, because legal text needs both: BM25 nails exact tokens (case names, "Section 149",
   "pay and recover"); dense catches paraphrase ("unlicensed driver" ≈ "driver without an effective
   licence"). Reciprocal Rank Fusion needs no score normalisation between the two.
-- **Cross-encoder rerank** restores the precision that the small embedding model gives up.
+- **Rerank** re-scores the fused candidates by query–chunk cosine similarity, tightening order
+  before the agent reads them.
 - **Chunking:** 800-token, 100-overlap, paragraph-aware, with page spans retained for citation.
 
-> **Deployment note — hosted vs. local retrieval.** Dense embeddings run through ChromaDB's **ONNX**
-> all-MiniLM-L6-v2 (onnxruntime, no torch) so the app fits the 512 MB free tier. The **cross-encoder
-> reranker pulls in torch and is therefore disabled on the hosted instance** (`ENABLE_RERANKER=false`);
-> hosted retrieval relies on hybrid BM25 + dense + RRF alone. The eval numbers in §6 were measured
-> **locally with the reranker on**, so hosted precision is a touch lower than reported. The honest fix
-> at scale is a hosted reranker endpoint (or a paid instance) — see §5/§8.
+> **Reranker — minimal, torch-free, runs everywhere.** An earlier design used a cross-encoder
+> (`ms-marco-MiniLM`), but that pulls **torch** and blew the 512 MB free tier. The shipped reranker is a
+> **bi-encoder cosine rerank reusing the same ONNX all-MiniLM-L6-v2 embedder** (onnxruntime, no torch),
+> so dense embeddings *and* rerank share one lightweight model and run **identically local and hosted**
+> (`ENABLE_RERANKER=true` on both). Trade-off: a bi-encoder rerank is weaker than a cross-encoder
+> (no query×chunk attention), so the precision ceiling is lower — but it costs ~0 extra memory and is
+> faster (one batched embed pass vs. N pair-scorings). The cross-encoder is the upgrade path on a paid
+> instance / hosted reranker endpoint — see §5/§8.
 
 ## 3. Key tradeoffs
 
@@ -59,7 +62,7 @@ Hybrid: BM25 (lexical) + Chroma dense (MiniLM)  →  RRF fusion  →  cross-enco
 | LLM access | Provider-agnostic `agent/llm.py` | — | OpenAI ↔ Anthropic ↔ any OpenAI-compatible API (DeepSeek) via env only |
 | Framework | LangChain `AgentExecutor` | Raw SDK control | Streaming callbacks → required live trace, less glue code |
 | Index at boot | **Commit** Chroma (24 MB) | Repo size | Avoids 72 s rebuild *and* the embed-all RAM spike on free tier |
-| Reranker | MiniLM cross-encoder | Latency | Falls back TinyBERT → identity on OOM, so it degrades safely |
+| Reranker | ONNX bi-encoder (shared MiniLM) | Cross-encoder precision | Torch-free → runs on 512 MB hosted too; cross-encoder is the paid-tier upgrade |
 
 ## 4. Query routing logic
 

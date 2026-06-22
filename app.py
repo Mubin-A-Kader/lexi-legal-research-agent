@@ -93,8 +93,8 @@ with st.sidebar:
         if st.button(ex, use_container_width=True):
             st.session_state["pending"] = ex
 
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        st.error("ANTHROPIC_API_KEY not set. Add it in the environment / Render secrets.")
+    if not os.getenv("OPENAI_API_KEY"):
+        st.error("OPENAI_API_KEY not set. Add it in the environment / Render secrets.")
 
 
 # ---------------- Main ----------------

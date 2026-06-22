@@ -47,8 +47,10 @@ PDF corpus (56) ──ingest──► extracted_docs.json + chunks.json (committ
 
 - **Embeddings:** `all-MiniLM-L6-v2` via ChromaDB's **ONNX** runtime (no torch) — keeps the hosted
   runtime under the 512 MB free-tier limit.
-- **Reranker:** `cross-encoder/ms-marco-MiniLM-L-6-v2` (torch) — **local only**; OFF on hosted via
-  `ENABLE_RERANKER=false`. Install it with `pip install -r requirements-local.txt`.
+- **Reranker:** minimal **bi-encoder cosine rerank** reusing the same ONNX MiniLM embedder (no torch),
+  so it runs on the hosted free tier too (`ENABLE_RERANKER=true` everywhere). A heavier cross-encoder
+  is the documented upgrade path for a paid instance (see ADR §3); not wired in by default to keep the
+  runtime torch-free.
 - **LLM:** OpenAI `gpt-4o-mini` (cheapest with reliable tool-calling) for both the agent and the
   eval/classify calls. Provider is a one-line switch (`LLM_PROVIDER=anthropic` → Claude); set
   `OPENAI_BASE_URL` to reuse the same code against any OpenAI-compatible API (e.g. DeepSeek).

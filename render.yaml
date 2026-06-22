@@ -12,5 +12,5 @@ services:
         value: "3.12.7"
       - key: TOKENIZERS_PARALLELISM
         value: "false"
-      - key: ENABLE_RERANKER     # OFF on free tier — avoids torch (512 MB memory limit)
-        value: "false"
+      - key: ENABLE_RERANKER     # ON: minimal ONNX bi-encoder rerank, no torch — fits 512 MB
+        value: "true"
