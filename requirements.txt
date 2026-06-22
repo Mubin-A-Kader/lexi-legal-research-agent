@@ -10,13 +10,13 @@ langchain-anthropic>=0.3.0,<0.4
 langchain-community>=0.3.0,<0.4
 
 # Retrieval
-# Dense embeddings use ChromaDB's built-in ONNX all-MiniLM-L6-v2 (onnxruntime, NOT torch),
-# keeping the hosted runtime under the 512 MB free-tier limit.
+# Dense embeddings use the OpenAI embeddings API (text-embedding-3-small) via the `openai` pkg
+# above — NO embedding model in-process (no onnxruntime, no torch), so the hosted runtime stays
+# well under the 512 MB free-tier limit. The local ONNX MiniLM model previously OOM'd the box.
 chromadb>=0.5.0
-onnxruntime>=1.17.0
 rank-bm25>=0.2.2
-# NOTE: the cross-encoder reranker (torch) is NOT installed here — it's heavy and OFF on hosted
-# (ENABLE_RERANKER=false). For local reranking: pip install -r requirements-local.txt
+# NOTE: the heavy torch cross-encoder reranker is NOT used. Rerank is a bi-encoder cosine re-score
+# reusing the OpenAI embedder (no extra memory). For the old local cross-encoder: requirements-local.txt
 
 # PDF parsing
 pymupdf>=1.24.0

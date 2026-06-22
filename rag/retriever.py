@@ -11,18 +11,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 from rag.ingestion import DocChunk, load_chunks
 
-_ef = None        # chroma ONNX embedding function (all-MiniLM-L6-v2, no torch)
+_ef = None        # chroma OpenAI embedding function (text-embedding-3-small, API — no local model)
 _retriever = None  # singleton HybridRetriever
 
 
 def _embed_fn():
-    """ChromaDB's built-in ONNX MiniLM embedder. Uses onnxruntime, NOT torch — so the
-    hosted runtime stays small enough for a 512 MB free tier. Same model as the local rerank
-    stack's embeddings, so query/doc vectors are compatible."""
+    """OpenAI embeddings API (text-embedding-3-small) via Chroma's EF. No model loads into the
+    process — no onnxruntime, no torch — so the hosted runtime fits a 512 MB free tier. The
+    reranker reuses this same embedder, so query/doc vectors are compatible.
+
+    Chroma's OpenAIEmbeddingFunction defaults to CHROMA_OPENAI_API_KEY, so we pass OPENAI_API_KEY
+    explicitly; api_base honours OPENAI_BASE_URL for OpenAI-compatible providers."""
     global _ef
     if _ef is None:
+        import os
         from chromadb.utils import embedding_functions
-        _ef = embedding_functions.ONNXMiniLM_L6_V2()
+        _ef = embedding_functions.OpenAIEmbeddingFunction(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            model_name=config.EMBED_MODEL,
+            api_base=config.OPENAI_BASE_URL,
+        )
     return _ef
 
 
@@ -32,7 +40,7 @@ def _chroma_client():
 
 
 def build_chroma(chunks: List[DocChunk]) -> int:
-    """Index chunks in Chroma. Chroma embeds via the ONNX EF (no torch). Returns count."""
+    """Index chunks in Chroma. Chroma embeds via the OpenAI EF (API). Returns count."""
     config.CHROMA_DIR.mkdir(parents=True, exist_ok=True)
     client = _chroma_client()
     try:
@@ -44,14 +52,19 @@ def build_chroma(chunks: List[DocChunk]) -> int:
         metadata={"hnsw:space": "cosine"},
         embedding_function=_embed_fn(),
     )
-    coll.add(
-        ids=[c.chunk_id for c in chunks],
-        documents=[c.text for c in chunks],
-        metadatas=[
-            {"doc_id": c.doc_id, "title": c.title, "page_start": c.page_start, "page_end": c.page_end}
-            for c in chunks
-        ],
-    )
+    # Batch the add: the OpenAI embeddings API caps each request at 300k tokens, and the full
+    # corpus exceeds that, so we send in fixed-size slices.
+    BATCH = 100
+    for i in range(0, len(chunks), BATCH):
+        batch = chunks[i:i + BATCH]
+        coll.add(
+            ids=[c.chunk_id for c in batch],
+            documents=[c.text for c in batch],
+            metadatas=[
+                {"doc_id": c.doc_id, "title": c.title, "page_start": c.page_start, "page_end": c.page_end}
+                for c in batch
+            ],
+        )
     return len(chunks)
 
 
@@ -93,7 +106,7 @@ class HybridRetriever:
         return [(self.chunks[i].chunk_id, float(s)) for i, s in ranked if s > 0]
 
     def dense_search(self, query: str, n: int) -> List[tuple[str, float]]:
-        # Chroma embeds the query via the same ONNX EF (no torch).
+        # Chroma embeds the query via the same OpenAI EF (API call, no local model).
         res = self.coll.query(query_texts=[query], n_results=n)
         ids = res["ids"][0]
         dists = res["distances"][0]
