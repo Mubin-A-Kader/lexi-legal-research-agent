@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 
 
-def get_chat_model(model: str = None, max_tokens: int = 4096):
+def get_chat_model(model: str = None, max_tokens: int = 4096, temperature: float = 0):
     model = model or config.AGENT_MODEL
     if config.LLM_PROVIDER == "anthropic":
         from langchain_anthropic import ChatAnthropic
@@ -23,14 +23,14 @@ def get_chat_model(model: str = None, max_tokens: int = 4096):
                            ("opus-4-6", "opus-4-7", "opus-4-8", "sonnet-4-6", "fable-5"))
         kwargs = dict(model=model, max_tokens=max_tokens)
         if use_thinking:
-            kwargs["thinking"] = {"type": "adaptive"}
+            kwargs["thinking"] = {"type": "adaptive"}  # temperature unsupported with thinking
         else:
-            kwargs["temperature"] = 0
+            kwargs["temperature"] = temperature
         return ChatAnthropic(**kwargs)
 
     from langchain_openai import ChatOpenAI
 
-    kwargs = dict(model=model, temperature=0, max_tokens=max_tokens)
+    kwargs = dict(model=model, temperature=temperature, max_tokens=max_tokens)
     if config.OPENAI_BASE_URL:
         kwargs["base_url"] = config.OPENAI_BASE_URL
     return ChatOpenAI(**kwargs)

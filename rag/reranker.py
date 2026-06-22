@@ -1,10 +1,11 @@
 """Minimal reranker. Torch-free: re-scores hybrid candidates by cosine similarity
-between the query and each chunk, using the SAME ONNX MiniLM embedder as dense retrieval
-(onnxruntime, no torch). Works identically local and on the 512 MB hosted tier.
+between the query and each chunk, reusing the SAME OpenAI embedder as dense retrieval
+(text-embedding-3-small via the API — no local model). Works identically local and on the
+512 MB hosted tier, since nothing loads into the process.
 
 This is a bi-encoder rerank (lighter than a cross-encoder) — it tightens ordering after
-RRF fusion without pulling sentence-transformers/torch into the runtime. Gated by
-ENABLE_RERANKER so it can still be switched off.
+RRF fusion without pulling any model into the runtime; it costs one batched embedding-API
+call per rerank. Gated by ENABLE_RERANKER so it can still be switched off.
 """
 import sys
 from pathlib import Path
@@ -32,7 +33,7 @@ def rerank(query: str, chunks: List[DocChunk], top_k: int = None) -> List[tuple[
         return [(c, 0.0) for c in chunks[:top_k]]
 
     import numpy as np
-    from rag.retriever import _embed_fn  # shared ONNX MiniLM singleton — no extra model load
+    from rag.retriever import _embed_fn  # shared OpenAI embedder singleton — no extra model load
 
     ef = _embed_fn()
     vecs = np.asarray(ef([query] + [c.text for c in chunks]), dtype=np.float32)

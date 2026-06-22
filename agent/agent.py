@@ -15,8 +15,9 @@ from agent.tools import ALL_TOOLS
 from agent.prompts import SYSTEM_PROMPT
 
 
-def build_agent(callbacks=None, max_iterations: int = 12) -> AgentExecutor:
-    llm = get_chat_model(config.AGENT_MODEL, max_tokens=4096)
+def build_agent(callbacks=None, max_iterations: int = 12, model: str = None,
+                temperature: float = 0) -> AgentExecutor:
+    llm = get_chat_model(model or config.AGENT_MODEL, max_tokens=4096, temperature=temperature)
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", SYSTEM_PROMPT),
