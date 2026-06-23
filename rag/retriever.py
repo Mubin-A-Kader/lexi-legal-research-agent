@@ -59,7 +59,7 @@ def build_chroma(chunks: List[DocChunk]) -> int:
         batch = chunks[i:i + BATCH]
         coll.add(
             ids=[c.chunk_id for c in batch],
-            documents=[c.text for c in batch],
+            documents=[c.summary or c.text[:200] for c in batch],  # embed summary (shorter), fall back to text excerpt
             metadatas=[
                 {"doc_id": c.doc_id, "title": c.title, "page_start": c.page_start, "page_end": c.page_end}
                 for c in batch
@@ -112,16 +112,55 @@ class HybridRetriever:
         dists = res["distances"][0]
         return [(cid, 1.0 - d) for cid, d in zip(ids, dists)]  # cosine sim
 
-    def hybrid_search(self, query: str, n_each: int = None, k_rrf: int = 60) -> List[DocChunk]:
-        """RRF-fuse BM25 + dense, return deduped DocChunks ordered by fused score."""
-        n_each = n_each or max(config.BM25_TOPK, config.DENSE_TOPK)
-        bm = self.bm25_search(query, n_each)
-        dn = self.dense_search(query, n_each)
+    def _multi_search_queries(self, query: str) -> list[str]:
+        """Generate multiple search angles from a query."""
+        variants = [query]
+        lower = query.lower()
 
+        # Add adverse/opposing angle
+        if "adverse" not in lower and "against" not in lower and "exonerated" not in lower:
+            variants.append(query + " exonerated denied rejected owner liable not liable claim rejected")
+
+        # Add supporting/favorable angle
+        if "supporting" not in lower and "favor" not in lower:
+            variants.append(query + " pay liable recover compensation award claimant")
+
+        # Add procedural angle (appeals, tribunals, decisions)
+        if "tribunal" not in lower and "appeal" not in lower:
+            variants.append(query.replace("find", "").replace("precedent", "") + " tribunal appeal decision award judgment compensation")
+
+        # Add void/breach angle (policy conditions, defects, violations)
+        if "void" in lower or "breach" in lower or "policy" in lower:
+            variants.append(query + " void policy breach violation condition unlicensed driver invalid license")
+
+        return variants
+
+    def hybrid_search(self, query: str, n_each: int = None, k_rrf: int = 60, multi: bool = True) -> List[DocChunk]:
+        """RRF-fuse BM25 + dense, return deduped DocChunks ordered by fused score.
+
+        If multi=True, run multiple search angles (supporting + adverse) and merge.
+        """
+        n_each = n_each or max(config.BM25_TOPK, config.DENSE_TOPK)
+
+        if not multi:
+            bm = self.bm25_search(query, n_each)
+            dn = self.dense_search(query, n_each)
+            rrf: dict[str, float] = {}
+            for ranklist in (bm, dn):
+                for rank, (cid, _) in enumerate(ranklist):
+                    rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (k_rrf + rank + 1)
+            order = sorted(rrf.items(), key=lambda x: -x[1])
+            return [self.by_id[cid] for cid, _ in order if cid in self.by_id]
+
+        # Multi-angle search
+        queries = self._multi_search_queries(query)
         rrf: dict[str, float] = {}
-        for ranklist in (bm, dn):
-            for rank, (cid, _) in enumerate(ranklist):
-                rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (k_rrf + rank + 1)
+        for q in queries:
+            bm = self.bm25_search(q, n_each)
+            dn = self.dense_search(q, n_each)
+            for ranklist in (bm, dn):
+                for rank, (cid, _) in enumerate(ranklist):
+                    rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (k_rrf + rank + 1)
 
         order = sorted(rrf.items(), key=lambda x: -x[1])
         return [self.by_id[cid] for cid, _ in order if cid in self.by_id]

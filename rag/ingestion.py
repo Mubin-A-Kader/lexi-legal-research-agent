@@ -25,6 +25,7 @@ class DocChunk:
     page_end: int
     title: str          # first non-trivial line of judgment, heuristic
     n_tokens: int
+    summary: str = ""   # contextual summary for retrieval
 
 
 def _ntok(text: str) -> int:
@@ -143,3 +144,27 @@ def load_docs() -> dict:
     """doc_id -> {title, full_text}"""
     raw = json.loads(config.EXTRACTED_JSON.read_text())
     return {d["doc_id"]: d for d in raw}
+
+
+def summarize_chunks(chunks: List[DocChunk]) -> List[DocChunk]:
+    """Generate 1-line summaries for each chunk. Pre-ingestion step."""
+    from agent.llm import complete
+
+    prompt_template = """Summarize this legal judgment excerpt in ONE sentence (max 50 words). Focus on: parties, outcome (who won), and key legal principle.
+
+TEXT:
+{text}
+
+SUMMARY:"""
+
+    for i, chunk in enumerate(chunks):
+        if i % 50 == 0:
+            print(f"  summarizing chunk {i}/{len(chunks)}...", end="\r")
+        try:
+            summary = complete(prompt_template.format(text=chunk.text[:1000]), model=config.EVAL_MODEL, max_tokens=50)
+            chunk.summary = summary.strip()
+        except Exception as e:
+            chunk.summary = f"{chunk.title[:60]}..."
+
+    print(f"  summarized {len(chunks)} chunks")
+    return chunks

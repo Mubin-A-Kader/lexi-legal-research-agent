@@ -22,7 +22,7 @@ PHRASINGS = [
 ]
 
 
-def retrieval_eval(k: int = 12) -> dict:
+def retrieval_eval(k: int = 30) -> dict:
     rows = []
     for q in PHRASINGS:
         ids = set(retriever_topk_ids(q, k=k))
