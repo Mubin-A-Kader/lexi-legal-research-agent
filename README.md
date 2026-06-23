@@ -6,21 +6,22 @@ research ("Find precedents supporting our claim where the truck driver was unlic
 says the policy is void"). The agent **decides its own workflow per query** — there is no hard-coded
 pipeline.
 
-**Hosted app:** _<ADD RENDER URL HERE AFTER DEPLOY>_
+**Hosted app:** https://lexi-legal-researcher.onrender.com/
 
 ---
 
 ## What it does
 
-A Claude tool-calling agent is given five tools and chooses which to call, in what order, and how
+A tool-calling agent is given six tools and chooses which to call, in what order, and how
 many times:
 
 | Tool | Purpose |
 |---|---|
-| `semantic_search` | Hybrid (BM25 + dense) retrieval + cross-encoder rerank |
+| `semantic_search` | Hybrid (BM25 + dense) retrieval + rerank; dedups to one chunk per doc before reranking so it ranks breadth across judgments |
 | `keyword_search` | Exact-term BM25 (case names, statute sections) |
 | `get_document` | Full text of one judgment |
-| `analyze_precedent` | LLM-classify one judgment vs. a client position → supporting / adverse / neutral + reasoning |
+| `find_adverse_precedents` | Lexical counter-search keyed on insurer-escape vocabulary, to surface judgments the opponent could use |
+| `analyze_precedent` | LLM-classify one judgment vs. the client position → supporting / adverse / neutral + reasoning (stance anchored to the claimant) |
 | `list_documents` | Corpus inventory |
 
 A simple query triggers one search; deep research triggers broad search → read/analyze the top
@@ -77,7 +78,7 @@ PDFs and without an embed-all memory spike.
 ## Evaluation
 
 ```bash
-python eval/run_all.py                 # all 4 dimensions (needs ANTHROPIC_API_KEY)
+python eval/run_all.py                 # all 4 dimensions (needs OPENAI_API_KEY; default provider)
 python eval/run_all.py --retrieval-only  # dims 1-2, RAG layer only, no API calls
 ```
 
