@@ -6,7 +6,7 @@ research ("Find precedents supporting our claim where the truck driver was unlic
 says the policy is void"). The agent **decides its own workflow per query** — there is no hard-coded
 pipeline.
 
-**Hosted app:** _<ADD RENDER URL HERE AFTER DEPLOY>_
+**Hosted app:** https://lexi-legal-researcher.onrender.com/
 
 ---
 
