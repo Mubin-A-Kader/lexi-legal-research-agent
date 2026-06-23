@@ -6,10 +6,12 @@ Tools:
   find_adverse_precedents - adverse-framed search; surfaces cases the opponent could use
   get_document            - full text of one judgment
   analyze_precedent       - LLM classifies one judgment vs a case position (supporting/adverse/neutral)
+  analyze_precedents      - same, but a whole list at once, run concurrently (fast path)
   list_documents          - corpus inventory (doc_id + title)
 """
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -140,15 +142,11 @@ def find_adverse_precedents(case_context: str, n: int = 8) -> str:
     )
 
 
-@tool
-def analyze_precedent(doc_id: str, case_context: str) -> str:
-    """Classify ONE judgment as supporting / adverse / neutral for a given client position.
-    Pass the doc_id and a short description of the client's case/argument (case_context).
-    Returns JSON with stance, the legal principle, specific reasoning, and risk/strength.
-    Use this on the most relevant judgments during deep precedent research."""
+def _analyze_one(doc_id: str, case_context: str) -> str:
+    """Classify one judgment (no @tool wrapper). Reused by both the single and batch tools."""
     d = _docs().get(doc_id)
     if not d:
-        return f"No document with doc_id={doc_id}."
+        return f"[analyze_precedent doc_id={doc_id}]\nNo document with doc_id={doc_id}."
     # Use reranked excerpts of this doc against the case_context to keep prompt tight.
     retriever = get_retriever()
     doc_chunks = [c for c in retriever.chunks if c.doc_id == doc_id]
@@ -161,8 +159,34 @@ def analyze_precedent(doc_id: str, case_context: str) -> str:
         case_context=case_context, doc_id=doc_id, doc_text=excerpt
     )
     text = complete(prompt, model=config.EVAL_MODEL, max_tokens=1024)
-    # Pass through; the agent reads the JSON. Prefix with doc_id for traceability.
     return f"[analyze_precedent doc_id={doc_id}]\n{text}"
+
+
+@tool
+def analyze_precedent(doc_id: str, case_context: str) -> str:
+    """Classify ONE judgment as supporting / adverse / neutral for a given client position.
+    Pass the doc_id and a short description of the client's case/argument (case_context).
+    Returns JSON with stance, the legal principle, specific reasoning, and risk/strength.
+    Prefer `analyze_precedents` (plural) when you have several doc_ids — it runs them in parallel."""
+    return _analyze_one(doc_id, case_context)
+
+
+@tool
+def analyze_precedents(doc_ids: list[str], case_context: str) -> str:
+    """Classify MANY judgments at once (supporting / adverse / neutral) for a client position.
+    Pass the full list of candidate doc_ids and one case_context. Runs the classifications
+    CONCURRENTLY, so analysing 10+ precedents costs roughly one call's latency, not ten.
+    Use this once per deep-research query with the union of all search hits — it is the fast path."""
+    ids = [i for i in dict.fromkeys(doc_ids) if i]  # de-dupe, keep order
+    if not ids:
+        return "No doc_ids provided."
+    # I/O-bound (each is an LLM HTTP call) → threads give near-linear speedup despite the GIL.
+    results: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=min(8, len(ids))) as pool:
+        futs = {pool.submit(_analyze_one, i, case_context): i for i in ids}
+        for f in futs:
+            results[futs[f]] = f.result()
+    return "\n\n".join(results[i] for i in ids)
 
 
 @tool
@@ -173,4 +197,4 @@ def list_documents() -> str:
     return json.dumps(items, ensure_ascii=False, indent=2)
 
 
-ALL_TOOLS = [semantic_search, keyword_search, find_adverse_precedents, get_document, analyze_precedent, list_documents]
+ALL_TOOLS = [semantic_search, keyword_search, find_adverse_precedents, get_document, analyze_precedent, analyze_precedents, list_documents]

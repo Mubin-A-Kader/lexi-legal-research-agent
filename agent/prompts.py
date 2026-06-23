@@ -29,13 +29,14 @@ You MUST complete these steps in order. Do NOT skip or abbreviate:
    b) `find_adverse_precedents` with the client's position — this tool surfaces cases the opponent
       could use against the client. You MUST call it; do not try to find adverse cases by hand.
 
-2. ANALYZE EVERY DISTINCT DOC surfaced by the searches using `analyze_precedent` (required before answering):
+2. ANALYZE EVERY DISTINCT DOC surfaced by the searches (required before answering):
    - Build the UNION of doc_ids from BOTH `semantic_search` AND `find_adverse_precedents`.
-   - Call `analyze_precedent` on EVERY distinct doc_id in that union — not a sample of 5. Missing a
-     surfaced precedent is a recall failure; the searches already filtered to relevant candidates.
+   - Call `analyze_precedents` (PLURAL) ONCE, passing that whole union as `doc_ids`. It runs the
+     classifications in parallel, so this is far faster than calling `analyze_precedent` one-by-one —
+     do NOT loop the singular tool. Analyse ALL surfaced docs, not a sample of 5; missing a surfaced
+     precedent is a recall failure, and the searches already filtered to relevant candidates.
    - MANDATORY: include EVERY doc_id returned by `find_adverse_precedents`. Do NOT drop them.
-   - Minimum floor is 5, but the target is ALL surfaced docs. Store every result.
-   - Count aloud the full set, e.g. "Analyzed 11 docs: doc_001, doc_003, ... ✓"
+   - Minimum floor is 5, but the target is ALL surfaced docs.
 
 3. CLASSIFY each analyzed doc as SUPPORTING / ADVERSE / NEUTRAL based on actual court holdings
 
