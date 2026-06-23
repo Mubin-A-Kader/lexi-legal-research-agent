@@ -18,6 +18,13 @@ def main(rebuild_chroma: bool = True):
     print(f"Parsing PDFs from {config.CORPUS_DIR} ...")
     docs, chunks = ingestion.build_corpus()
     print(f"  {len(docs)} docs, {len(chunks)} chunks in {time.time()-t0:.1f}s")
+
+    # Generate contextual summaries for retrieval
+    t_sum = time.time()
+    print("Generating contextual summaries ...")
+    chunks = ingestion.summarize_chunks(chunks)
+    print(f"  summaries in {time.time()-t_sum:.1f}s")
+
     ingestion.save_extracted(docs, chunks)
     print(f"  wrote {config.EXTRACTED_JSON.name}, {config.CHUNKS_JSON.name}")
 

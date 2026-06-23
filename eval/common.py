@@ -52,17 +52,26 @@ def prf(predicted: set, gold: set) -> dict:
             "f1": round(f1, 3), "tp": tp, "n_pred": len(predicted), "n_gold": len(gold)}
 
 
-def retriever_topk_ids(query: str, k: int = 10) -> list[str]:
-    """Retrieval-only doc_ids (no LLM) — fast precision/recall of the RAG layer alone."""
+def retriever_topk_ids(query: str, k: int = 20, pool: int = 120) -> list[str]:
+    """Retrieval-only doc_ids (no LLM) — fast precision/recall of the RAG layer alone.
+
+    Dedup chunks -> one-per-doc BEFORE reranking. The reranker has a fixed budget; if fed many
+    chunks of the same doc it ranks DEPTH (best passage within a few docs) and buries lower-ranked
+    relevant docs, tanking recall. One chunk per doc makes it rank BREADTH across docs instead.
+    """
     from rag.retriever import get_retriever
     from rag.reranker import rerank
 
     r = get_retriever()
-    cands = r.hybrid_search(query)[:30]
-    reranked = rerank(query, cands, top_k=k)
-    seen, out = set(), []
-    for c, _ in reranked:
+    cands = r.hybrid_search(query)[:pool]
+    seen, uniq = set(), []
+    for c in cands:
         if c.doc_id not in seen:
             seen.add(c.doc_id)
+            uniq.append(c)
+    reranked = rerank(query, uniq, top_k=k)
+    out = []
+    for c, _ in reranked:
+        if c.doc_id not in out:
             out.append(c.doc_id)
     return out

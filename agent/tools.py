@@ -1,11 +1,12 @@
 """Agent tools. The agent composes these freely — no hard-coded pipeline.
 
 Tools:
-  semantic_search   - dense+lexical hybrid + rerank, returns ranked chunks
-  keyword_search    - pure BM25 lexical (exact terms, citations)
-  get_document      - full text of one judgment
-  analyze_precedent - LLM classifies one judgment vs a case position (supporting/adverse/neutral)
-  list_documents    - corpus inventory (doc_id + title)
+  semantic_search         - dense+lexical hybrid + rerank, returns ranked chunks
+  keyword_search          - pure BM25 lexical (exact terms, citations)
+  find_adverse_precedents - adverse-framed search; surfaces cases the opponent could use
+  get_document            - full text of one judgment
+  analyze_precedent       - LLM classifies one judgment vs a case position (supporting/adverse/neutral)
+  list_documents          - corpus inventory (doc_id + title)
 """
 import json
 import sys
@@ -54,9 +55,21 @@ def semantic_search(query: str, n: int = 8) -> str:
     "policy void due to unlicensed driver"). Returns top-n ranked chunks with doc_id,
     title, snippet, and relevance score. Use this first for most research."""
     retriever = get_retriever()
-    candidates = retriever.hybrid_search(query)[:30]
-    reranked = rerank(query, candidates, top_k=n)
-    return _fmt_hits(reranked)
+    # Dedup to one chunk per doc BEFORE reranking: the reranker's fixed budget otherwise ranks
+    # depth (many passages of a few docs) and buries other relevant precedents, hurting recall.
+    # One-per-doc makes it rank breadth across distinct judgments.
+    candidates = retriever.hybrid_search(query)[:120]
+    seen, uniq = set(), []
+    for c in candidates:
+        if c.doc_id not in seen:
+            seen.add(c.doc_id)
+            uniq.append(c)
+    reranked = rerank(query, uniq, top_k=n)
+    return (
+        "SUPPORTING/RELEVANT CANDIDATES. For DEEP RESEARCH you MUST call analyze_precedent on EACH "
+        "doc_id below (do not sample) before answering — stance is decided by analyze_precedent, "
+        "not by this snippet:\n" + _fmt_hits(reranked)
+    )
 
 
 @tool
@@ -80,6 +93,51 @@ def get_document(doc_id: str) -> str:
     if len(text) > 12000:
         text = text[:12000] + "\n...[truncated]"
     return f"# {d['title']} ({doc_id})\n\n{text}"
+
+
+@tool
+def find_adverse_precedents(case_context: str, n: int = 8) -> str:
+    """Surface judgments the OPPONENT could use against the client (adverse precedents).
+    Runs a search explicitly framed for opposite outcomes (insurer exonerated / claim denied /
+    policy void upheld / not liable) so it finds cases the normal supporting search buries.
+    Pass a short description of the client's position. Returns top-n candidate doc_ids that you
+    MUST then pass to analyze_precedent — these are the most likely adverse precedents. Do not
+    skip any; some will be confirmed adverse, some neutral, but all must be checked."""
+    retriever = get_retriever()
+    # Adverse precedents are distinguished by explicit holding vocabulary ("exonerated", "fake
+    # licence", "not liable to satisfy the award"), NOT by topic. The dense embedder clusters
+    # everything in this corpus by topic (unlicensed-driver insurance) and so buries the genuinely
+    # adverse cases among the supporting majority. BM25 on the holding vocabulary keys on the exact
+    # discriminating tokens and floats them up — so this tool is intentionally lexical.
+    # Cover the DISTINCT adverse mechanisms, not just the fake-licence line: insurer exonerated,
+    # claim dismissed against insurer, policy void, owner-alone-liable, and the gratuitous-passenger /
+    # "not a third party" escapes. BM25 cannot see holding DIRECTION (adverse and supporting cases
+    # share topic words), so we cast a wider lexical net and let analyze_precedent confirm stance.
+    adverse_signal = (
+        "insurer exonerated not liable claim dismissed against insurer policy void fake licence "
+        "owner alone liable to pay compensation gratuitous passenger not a third party "
+        "award only against owner of the vehicle"
+    )
+    # Bias the lexical query with any distinctive client-context terms so the tool stays
+    # responsive to the matter, while the static holding vocabulary does the discriminating.
+    bm = retriever.bm25_search(f"{adverse_signal} {case_context}", 40)
+    bm_signal = retriever.bm25_search(adverse_signal, 40)
+    # Prefer the pure-signal ranking (best adverse discrimination); fall back to context-biased.
+    bm = bm_signal or bm
+    seen, picked = set(), []
+    for cid, score in bm:
+        c = retriever.by_id[cid]
+        if c.doc_id not in seen:
+            seen.add(c.doc_id)
+            picked.append((c, score))
+        if len(picked) >= n:
+            break
+
+    hits = _fmt_hits(picked)
+    return (
+        "ADVERSE CANDIDATES (cases the insurer could use against the client). "
+        "You MUST call analyze_precedent on EACH doc_id below before answering:\n" + hits
+    )
 
 
 @tool
@@ -115,4 +173,4 @@ def list_documents() -> str:
     return json.dumps(items, ensure_ascii=False, indent=2)
 
 
-ALL_TOOLS = [semantic_search, keyword_search, get_document, analyze_precedent, list_documents]
+ALL_TOOLS = [semantic_search, keyword_search, find_adverse_precedents, get_document, analyze_precedent, list_documents]

@@ -37,15 +37,15 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
 EMBED_DIM = int(os.getenv("EMBED_DIM", "1536"))  # text-embedding-3-small native dim
 # Rerank reuses the same OpenAI embedder for a bi-encoder cosine re-score — no extra model load,
 # costs only embedding-API calls. ON by default; switch off with ENABLE_RERANKER=false.
-ENABLE_RERANKER = os.getenv("ENABLE_RERANKER", "true").lower() in ("1", "true", "yes")
-
+# ENABLE_RERANKER = os.getenv("ENABLE_RERANKER", "true").lower() in ("1", "true", "yes")  # contextual retrieval benefit
+ENABLE_RERANKER = True
 # --- Chunking ---
 CHUNK_TOKENS = int(os.getenv("CHUNK_TOKENS", "800"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 
 # --- Retrieval ---
-BM25_TOPK = int(os.getenv("BM25_TOPK", "20"))
-DENSE_TOPK = int(os.getenv("DENSE_TOPK", "20"))
-RERANK_TOPK = int(os.getenv("RERANK_TOPK", "8"))
+BM25_TOPK = int(os.getenv("BM25_TOPK", "80"))
+DENSE_TOPK = int(os.getenv("DENSE_TOPK", "80"))
+RERANK_TOPK = int(os.getenv("RERANK_TOPK", "30"))
 
 COLLECTION_NAME = "legal_judgments"

@@ -1,40 +1,41 @@
 {
   "case_context": "Client Mrs. Lakshmi Devi's husband (age 42, income Rs 35,000/month, dependents: wife + two minor children aged 8 and 12) was killed by a commercial truck whose driver had no valid driving licence. National Insurance Co. denies the claim arguing the policy is void because the driver was unlicensed. We act for the claimant and want to (a) compel the insurer to pay, and (b) maximise compensation.",
 
-  "methodology": "Labels were derived by mining the 56-judgment corpus for the case's core legal theme (unlicensed/defective-licence driver vs. insurer's attempt to avoid liability) and then verifying each candidate's OUTCOME from its judgment text. 'relevant' = the judgment turns on insurer liability where a driver licence / policy-breach defence is raised. 'supporting' = court still made the insurer pay the claimant (typically 'pay and recover' from the owner, per the National Insurance v. Swaran Singh line). 'adverse' = court exonerated or limited the insurer's liability on a licence/breach ground. This is a hand-curated benchmark for an automated eval; it is a defensible subset, not an exhaustive ground truth.",
+  "methodology": "Labels were derived by mining the 56-judgment corpus for the case's core legal theme (unlicensed/defective-licence driver vs. insurer's attempt to avoid liability) and then verifying each candidate's OPERATIVE ORDER by reading the judgment text. 'relevant' = the judgment turns on insurer liability where a driver licence / policy-breach defence is raised. 'supporting' = court made the insurer pay the claimant, whether directly or via 'pay and recover' from the owner (per National Insurance v. Swaran Singh). 'adverse' = court exonerated the insurer entirely (claimant left to recover from the owner only) or limited insurer liability on a licence/breach/third-party ground. Stance is judged from the CLAIMANT's perspective: insurer-pays = supporting, insurer-escapes = adverse. This is a hand-curated benchmark for an automated eval; a defensible subset, not exhaustive ground truth. Docs whose operative order was read to set the label: 001, 002, 003, 005, 006, 018, 024, 025, 026, 027, 028, 029, 030, 031, 032, 033, 034, 035, 041.",
 
   "relevant_doc_ids": [
-    "doc_001", "doc_002", "doc_003", "doc_005", "doc_006", "doc_024", "doc_025",
-    "doc_026", "doc_027", "doc_028", "doc_029", "doc_030", "doc_031", "doc_032",
-    "doc_033", "doc_034", "doc_035", "doc_041"
+    "doc_001", "doc_002", "doc_003", "doc_005", "doc_006", "doc_018", "doc_024",
+    "doc_025", "doc_026", "doc_027", "doc_028", "doc_029", "doc_030", "doc_031",
+    "doc_032", "doc_033", "doc_034", "doc_035", "doc_041"
   ],
 
   "supporting_doc_ids": [
-    "doc_003", "doc_006", "doc_024", "doc_025", "doc_026", "doc_027", "doc_028",
-    "doc_029", "doc_030", "doc_032", "doc_033", "doc_034", "doc_035"
+    "doc_001", "doc_003", "doc_005", "doc_006", "doc_018", "doc_024", "doc_025",
+    "doc_026", "doc_027", "doc_029", "doc_032", "doc_033", "doc_034", "doc_035"
   ],
 
-  "adverse_doc_ids": ["doc_005", "doc_031", "doc_041"],
+  "adverse_doc_ids": ["doc_002", "doc_028", "doc_030", "doc_031", "doc_041"],
 
   "doc_notes": {
-    "doc_001": "Insurer appeal re compensation; unlicensed-driver theme. Relevant.",
-    "doc_002": "Insurer held not liable, owner pays (pay-and-recover style). Relevant; claimant still recovers.",
-    "doc_003": "Unlicensed driver; insurer made to pay and recover from owner. Supporting.",
-    "doc_005": "Insurer exonerated from satisfying the award on licence/breach ground. ADVERSE.",
-    "doc_006": "Unlicensed driver, pay-and-recover; insurer liable to claimant. Supporting.",
-    "doc_024": "Insurer jointly/severally liable to pay compensation despite defence. Supporting.",
-    "doc_025": "Unlicensed driver; pay-and-recover. Supporting.",
-    "doc_026": "Pay-and-recover; claimant protected. Supporting.",
-    "doc_027": "Unlicensed driver; pay-and-recover. Supporting.",
-    "doc_028": "Unlicensed driver; pay-and-recover. Supporting.",
-    "doc_029": "Unlicensed driver; pay-and-recover, minor dependent. Supporting.",
-    "doc_030": "Pay-and-recover. Supporting.",
-    "doc_031": "Laxmi Narain Dhut (SC) — limits Swaran Singh for transfer/renewal contexts; insurer can avoid. ADVERSE.",
-    "doc_032": "S. Iyyapan — unlicensed driver, insurer liable / pay-and-recover. Supporting.",
-    "doc_033": "Unlicensed driver; pay-and-recover. Supporting.",
-    "doc_034": "Unlicensed driver; pay-and-recover. Supporting.",
-    "doc_035": "Unlicensed driver; pay-and-recover. Supporting.",
-    "doc_041": "Court held insurer 'not liable to pay compensation'. ADVERSE."
+    "doc_001": "United India v. Neelam Devi: tribunal's insurer-not-liable finding REVERSED; insurer 'cannot escape its liability', pays claimant then recovers from insured. SUPPORTING. [corrected: was relevant-only]",
+    "doc_002": "Liyakat Ali: tractor used for non-agricultural transport => policy breach; insurer NOT liable, owner pays. Insurer exonerated on breach ground. ADVERSE. [corrected: was relevant-only]",
+    "doc_003": "United India v. Parvathi Hebbar: liability on owner but insurer directed to pay then recover ('Pay and Recover'). SUPPORTING.",
+    "doc_005": "L&T Insurance v. Bindudevi: insurer pleaded fake licence; court held insurer could NOT prove the owner knew => no fundamental breach => appeal dismissed, insurer pays. SUPPORTING. [corrected: gold previously mislabeled ADVERSE]",
+    "doc_006": "National Insurance v. Meena: fake/ineffective licence; pay-and-recover, insurer pays claimant then recovers from owner. SUPPORTING.",
+    "doc_018": "Oriental Insurance v. Rani: appeal dismissed, award confirmed, insurer directed to pay entire compensation (Sec 170 application rejected). SUPPORTING. [ADDED: was missing from gold]",
+    "doc_024": "Sunil Killiket v. Subbraya: HC's bare exoneration set aside; insurer directed to pay enhanced compensation and recover from owner ('Pay and Recover'). SUPPORTING.",
+    "doc_025": "New India v. Yallavva (Full Bench): even where insurer proves Sec 149(2) breach, must satisfy third-party award and recover. SUPPORTING.",
+    "doc_026": "National Insurance v. Ellappa: pay-and-recover; insurer satisfies award then executes against owner. SUPPORTING.",
+    "doc_027": "The Manager v. Chennamma: no effective licence; pay-and-recover, insurer pays claimant. SUPPORTING.",
+    "doc_028": "United India v. Sukumarbai: passenger for hire/reward on goods vehicle NOT a third party; award against insurer SET ASIDE, claim against insurer dismissed, claimant recovers from owner only. ADVERSE. [corrected: gold previously mislabeled SUPPORTING]",
+    "doc_029": "United India v. Minor Mahesh Kanubhai (Full Bench): policy 'any person' covers gratuitous occupant; insurer liable to indemnify / pay-and-recover. SUPPORTING (reference judgment, claimant-favourable on net).",
+    "doc_030": "Dadapeera v. Mallesh: claimant rode on tractor mud-guard => not a third party => pay-and-recover NOT available; insurer EXONERATED, owner alone pays. ADVERSE. [corrected: gold previously mislabeled SUPPORTING]",
+    "doc_031": "National Insurance v. Laxmi Narain Dhut (SC): limits Swaran Singh for fake-licence/renewal contexts; insurer's appeals allowed, insurer can avoid. ADVERSE.",
+    "doc_032": "S. Iyyapan v. United India (SC): no commercial endorsement on LMV licence does not let insurer disown liability; HC reversed, insurer liable. SUPPORTING.",
+    "doc_033": "Satto v. New India: insurer's statutory duty to satisfy award first, then recover from owner/driver. SUPPORTING.",
+    "doc_034": "K.G. Srinivasamurthy v. Habib Khathun: insurer jointly and severally liable with owner, ordered to pay compensation. SUPPORTING.",
+    "doc_035": "United India v. V. Vijayakumar: insurer must pay claimant then recover from insured/driver ('Pay and Recover'). SUPPORTING.",
+    "doc_041": "M. (claimant) petition: compensation awarded against Respondent No.1 (owner/driver) only; insurer not made to pay. ADVERSE."
   },
 
   "general_query_gold": {
