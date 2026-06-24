@@ -12,7 +12,10 @@ import config
 from rag.ingestion import DocChunk, load_chunks
 
 _ef = None        # chroma OpenAI embedding function (text-embedding-3-small, API — no local model)
+import threading
+
 _retriever = None  # singleton HybridRetriever
+_retriever_lock = threading.Lock()
 
 
 def _embed_fn():
@@ -168,6 +171,11 @@ class HybridRetriever:
 
 def get_retriever() -> HybridRetriever:
     global _retriever
+    # Double-checked locking: the agent can fire several search tools in one turn, and the
+    # streaming/async path runs them concurrently — without the lock they race on first init
+    # and both try to build the Chroma collection ("Collection already exists").
     if _retriever is None:
-        _retriever = HybridRetriever(load_chunks())
+        with _retriever_lock:
+            if _retriever is None:
+                _retriever = HybridRetriever(load_chunks())
     return _retriever

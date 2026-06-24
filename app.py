@@ -4,6 +4,7 @@ REQUIRED by the assessment: intermediate reasoning steps must be visible — too
 documents retrieved, scores, and classifications — not just the final answer. A custom
 LangChain callback renders each tool call + result live into the page.
 """
+import asyncio
 import json
 import os
 import sys
@@ -12,7 +13,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import streamlit as st
-from langchain_core.callbacks import BaseCallbackHandler
 
 import config
 
@@ -180,32 +180,48 @@ def _check_auth() -> bool:
 _check_auth()
 
 
-class StreamlitTraceCallback(BaseCallbackHandler):
-    """Render agent tool calls + results into an expander as they happen."""
+async def _run_streaming(query, model, temperature, steps_box, answer_box):
+    """Drive the agent via astream_events so the UI updates live: each tool call/result renders
+    into steps_box as it happens, and the final answer is token-streamed into answer_box.
 
-    def __init__(self, container):
-        self.container = container
-        self.step = 0
+    Why astream_events (not streaming=True on the model): setting streaming=True on the
+    tool-calling model makes gpt-4o-mini emit narration instead of a tool call and the agent
+    terminates with no retrieval. astream_events streams the model INTERNALLY regardless, so the
+    agent model stays non-streaming (tools fire normally) while we still get token events.
 
-    def on_tool_start(self, serialized, input_str, **kwargs):
-        self.step += 1
-        name = serialized.get("name", "tool")
-        with self.container:
-            st.markdown(f"**Step {self.step} — `{name}`**")
-            st.code(_short(input_str), language="text")
+    The agent makes several LLM calls (tool-routing + the final synthesis). We reset the token
+    buffer on every tool start, so only the tokens after the LAST tool call — the answer — remain.
+    """
+    from agent.agent import build_agent
 
-    def on_tool_end(self, output, **kwargs):
-        with self.container:
-            st.markdown("Retrieved:")
-            st.markdown(_render_tool_output(str(output)))
-            st.divider()
-
-    def on_llm_start(self, *a, **k):
-        pass
-
-    def on_agent_finish(self, finish, **kwargs):
-        with self.container:
-            st.markdown("**Agent finished reasoning.**")
+    executor = build_agent(model=model, temperature=temperature)
+    step = 0
+    tokens = ""
+    answer = ""
+    async for ev in executor.astream_events({"input": query}, version="v2"):
+        et = ev["event"]
+        if et == "on_tool_start":
+            step += 1
+            tokens = ""  # discard pre-tool routing narration; keep only post-last-tool text
+            with steps_box:
+                st.markdown(f"**Step {step} — `{ev.get('name', 'tool')}`**")
+                st.code(_short(str(ev["data"].get("input", ""))), language="text")
+        elif et == "on_tool_end":
+            with steps_box:
+                st.markdown("Retrieved:")
+                st.markdown(_render_tool_output(str(ev["data"].get("output", ""))))
+                st.divider()
+        elif et == "on_chat_model_stream":
+            chunk = ev["data"]["chunk"].content
+            if isinstance(chunk, str) and chunk:
+                tokens += chunk
+                answer_box.markdown("### Answer\n" + tokens + " ▌")
+        elif et == "on_chain_end" and ev.get("name") == "AgentExecutor":
+            out = ev["data"]["output"].get("output", "")
+            if isinstance(out, list):  # anthropic content blocks
+                out = "\n".join(b.get("text", "") for b in out if isinstance(b, dict))
+            answer = out or tokens
+    return answer
 
 
 def _short(s: str, n: int = 300) -> str:
@@ -297,20 +313,15 @@ if query:
 
     with st.chat_message("assistant", avatar=AVATARS["assistant"]):
         steps_box = st.expander("Agent reasoning steps (tools, retrieval, ranking)", expanded=True)
-        cb = StreamlitTraceCallback(steps_box)
+        answer_box = st.empty()  # final answer streams here token-by-token
 
         with st.spinner("Researching the corpus…"):
-            from agent.agent import build_agent
-
-            executor = build_agent(callbacks=[cb], model=model, temperature=temperature)
             try:
-                result = executor.invoke({"input": query})
-                answer = result["output"]
+                answer = asyncio.run(
+                    _run_streaming(query, model, temperature, steps_box, answer_box)
+                )
             except Exception as e:
                 answer = f"Error: {e}"
 
-        if isinstance(answer, list):  # anthropic content blocks
-            answer = "\n".join(b.get("text", "") for b in answer if isinstance(b, dict))
-        st.markdown("### Answer")
-        st.markdown(answer)
+        answer_box.markdown("### Answer\n" + answer)  # finalize (drop the streaming cursor)
         st.session_state["history"].append({"role": "assistant", "content": answer})
